@@ -1,5 +1,6 @@
 #include "time.h"
-#include<FastLED.h>
+#include <WiFi.h>
+#include <FastLED.h>
 #include <LEDMatrix.h>
 #include <LEDText.h>
 #include <FontRobotron.h>
@@ -10,6 +11,7 @@
 #define ARDUINO_RUNNING_CORE 1
 #endif
 
+#define NUM_LEDS 256
 #define GAS_ANALOG 4
 
 #define LED_PIN        12
@@ -20,9 +22,22 @@
 #define MATRIX_HEIGHT  -8
 #define MATRIX_TYPE    VERTICAL_ZIGZAG_MATRIX // Wie sind die LEDs angeordnet
 
+CRGB lels[NUM_LEDS];
+
 cLEDMatrix<MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX_TYPE> leds;
 
 cLEDText ScrollingMsg;
+
+static int PixelPosition(int x, int y){
+  if(x%2==0){
+    return 8 * x + y;
+    
+  }
+  else
+  {
+    return 8 * x + 7 - y;
+  }
+}
 
 // define two tasks for Blink & AnalogRead
 void TaskBlink( void *pvParameters );
@@ -77,7 +92,11 @@ void TaskBlink(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
 
+  FastLED.addLeds<NEOPIXEL, LED_PIN>(lels, NUM_LEDS);
+  FastLED.setBrightness(255);
+  
   for(;;){
+    /*
     if (ScrollingMsg.UpdateText() == -1){
     ScrollingMsg.SetText((unsigned char *)TxtDemo, sizeof(TxtDemo) - 1);
     delay(20);
@@ -85,6 +104,18 @@ void TaskBlink(void *pvParameters)  // This is a task.
   else
     FastLED.show();
   delay(20);
+  */
+  
+
+    lels[PixelPosition(2, 2)] = CHSV(0, 255, 255);
+    lels[PixelPosition(3, 2)] = CHSV(0, 255, 255);
+    lels[PixelPosition(4, 2)] = CHSV(0, 255, 255);
+    lels[PixelPosition(3, 3)] = CHSV(0, 255, 255);
+    lels[PixelPosition(3, 4)] = CHSV(0, 255, 255);
+    lels[PixelPosition(3, 5)] = CHSV(0, 255, 255);
+
+
+    FastLED.show();
   }
 }
 void TaskAnalogReadA3(void *pvParameters)  // This is a task.
