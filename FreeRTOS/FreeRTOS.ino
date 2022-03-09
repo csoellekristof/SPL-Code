@@ -22,16 +22,23 @@
 #define MATRIX_HEIGHT  -8
 #define MATRIX_TYPE    VERTICAL_ZIGZAG_MATRIX // Wie sind die LEDs angeordnet
 
+const char* ssid       = "sheeshtof";
+const char* password   = "asdasdasd";
+
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 3600;
+const int   daylightOffset_sec = 3600;
+
 CRGB lels[NUM_LEDS];
 
 cLEDMatrix<MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX_TYPE> leds;
 
 cLEDText ScrollingMsg;
 
-static int PixelPosition(int x, int y){
-  if(x%2==0){
+static int PixelPosition(int x, int y) {
+  if (x % 2 == 0) {
     return 8 * x + y;
-    
+
   }
   else
   {
@@ -39,16 +46,27 @@ static int PixelPosition(int x, int y){
   }
 }
 
+void printLocalTime()
+{
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+}
+
 // define two tasks for Blink & AnalogRead
 void TaskBlink( void *pvParameters );
 void TaskAnalogReadA3( void *pvParameters );
+void TaskGetTime( void *pvParameters );
 const unsigned char TxtDemo[] = { EFFECT_HSV_CV "\x00\xff\xff\x50\xff\xff" "    KRISTOF"};
 // the setup function runs once when you press reset or power the board
 void setup() {
-  
+
   // initialize serial communication at 115200 bits per second:
   Serial.begin(115200);
-  
+
   // Now set up two tasks to run independently.
   xTaskCreatePinnedToCore(
     TaskBlink
@@ -56,7 +74,7 @@ void setup() {
     ,  2048  // This stack size can be checked & adjusted by reading the Stack Highwater
     ,  NULL
     , 1  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
-    ,  NULL 
+    ,  NULL
     ,  ARDUINO_RUNNING_CORE);
 
   xTaskCreatePinnedToCore(
@@ -65,7 +83,16 @@ void setup() {
     ,  2048  // Stack size
     ,  NULL
     ,  1 // Priority
-    ,  NULL 
+    ,  NULL
+    ,  ARDUINO_RUNNING_CORE);
+
+    xTaskCreatePinnedToCore(
+    TaskGetTime
+    ,  "GetTime"
+    ,  2048  // Stack size
+    ,  NULL
+    ,  1 // Priority
+    ,  NULL
     ,  ARDUINO_RUNNING_CORE);
 
   // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
@@ -78,6 +105,23 @@ void setup() {
   ScrollingMsg.Init(&leds, leds.Width(), leds.Height() + 1, 0, 0);
   ScrollingMsg.SetText((unsigned char *)TxtDemo, sizeof(TxtDemo) - 1);
   ScrollingMsg.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 0xff, 0x00, 0xff);
+
+  //connect to WiFi
+  Serial.printf("Connecting to %s ", ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+      delay(500);
+      Serial.print(".");
+  }
+  Serial.println(" CONNECTED");
+  
+  //init and get the time
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  printLocalTime();
+
+  //disconnect WiFi as it's no longer needed
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
 }
 
 void loop()
@@ -94,18 +138,18 @@ void TaskBlink(void *pvParameters)  // This is a task.
 
   FastLED.addLeds<NEOPIXEL, LED_PIN>(lels, NUM_LEDS);
   FastLED.setBrightness(255);
-  
-  for(;;){
+
+  for (;;) {
     /*
-    if (ScrollingMsg.UpdateText() == -1){
-    ScrollingMsg.SetText((unsigned char *)TxtDemo, sizeof(TxtDemo) - 1);
-    delay(20);
-  }
-  else
-    FastLED.show();
-  delay(20);
-  */
-  
+      if (ScrollingMsg.UpdateText() == -1){
+      ScrollingMsg.SetText((unsigned char *)TxtDemo, sizeof(TxtDemo) - 1);
+      delay(20);
+      }
+      else
+      FastLED.show();
+      delay(20);
+    */
+
 
     lels[PixelPosition(2, 2)] = CHSV(0, 255, 255);
     lels[PixelPosition(3, 2)] = CHSV(0, 255, 255);
@@ -121,15 +165,15 @@ void TaskBlink(void *pvParameters)  // This is a task.
 void TaskAnalogReadA3(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
-  
-/*
-  AnalogReadSerial
-  Reads an analog input on pin A3, prints the result to the serial monitor.
-  Graphical representation is available using serial plotter (Tools > Serial Plotter menu)
-  Attach the center pin of a potentiometer to pin A3, and the outside pins to +5V and ground.
 
-  This example code is in the public domain.
-*/
+  /*
+    AnalogReadSerial
+    Reads an analog input on pin A3, prints the result to the serial monitor.
+    Graphical representation is available using serial plotter (Tools > Serial Plotter menu)
+    Attach the center pin of a potentiometer to pin A3, and the outside pins to +5V and ground.
+
+    This example code is in the public domain.
+  */
 
   for (;;)
   {
@@ -138,5 +182,16 @@ void TaskAnalogReadA3(void *pvParameters)  // This is a task.
     // print out the value you read:
     Serial.println(sensorValue);
     vTaskDelay(10);  // one tick delay (15ms) in between reads for stability
+  }
+}
+
+void TaskGetTime(void *pvParameters)  // This is a task.
+{
+  (void) pvParameters;
+
+  for (;;)
+  {
+    vTaskDelay(1000);
+    printLocalTime();
   }
 }
