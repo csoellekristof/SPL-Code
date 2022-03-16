@@ -29,6 +29,10 @@ const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 3600;
 const int   daylightOffset_sec = 3600;
 
+int timeDate = 0;
+long int letzteZeit = 0;
+int zahl = 48;
+
 CRGB lels[NUM_LEDS];
 
 cLEDMatrix<MATRIX_WIDTH, MATRIX_HEIGHT, MATRIX_TYPE> leds;
@@ -49,18 +53,20 @@ static int PixelPosition(int x, int y) {
 void printLocalTime()
 {
   struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)){
+  if (!getLocalTime(&timeinfo)) {
     Serial.println("Failed to obtain time");
     return;
   }
+  timeDate = timeinfo.tm_sec;
   Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+  Serial.println(timeDate);
 }
 
 // define two tasks for Blink & AnalogRead
 void TaskBlink( void *pvParameters );
 void TaskAnalogReadA3( void *pvParameters );
 void TaskGetTime( void *pvParameters );
-const unsigned char TxtDemo[] = { EFFECT_HSV_CV "\x00\xff\xff\x50\xff\xff" "    KRISTOF"};
+unsigned char TxtDemo[] = { EFFECT_HSV_CV "\x00\xff\xff\x50\xff\xff" "    KRISTOF"};
 // the setup function runs once when you press reset or power the board
 void setup() {
 
@@ -71,7 +77,7 @@ void setup() {
   xTaskCreatePinnedToCore(
     TaskBlink
     ,  "TaskBlink"   // A name just for humans
-    ,  2048  // This stack size can be checked & adjusted by reading the Stack Highwater
+    ,  16000  // This stack size can be checked & adjusted by reading the Stack Highwater
     ,  NULL
     , 1  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
     ,  NULL
@@ -80,41 +86,30 @@ void setup() {
   xTaskCreatePinnedToCore(
     TaskAnalogReadA3
     ,  "AnalogReadA3"
-    ,  2048  // Stack size
+    ,  16000  // Stack size
     ,  NULL
     ,  1 // Priority
     ,  NULL
     ,  ARDUINO_RUNNING_CORE);
 
-    xTaskCreatePinnedToCore(
+  xTaskCreatePinnedToCore(
     TaskGetTime
     ,  "GetTime"
-    ,  2048  // Stack size
+    ,  16000  // Stack size
     ,  NULL
     ,  1 // Priority
     ,  NULL
     ,  ARDUINO_RUNNING_CORE);
-
-  // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
-
-  FastLED.addLeds<CHIPSET, LED_PIN, COLOR_ORDER>(leds[0], leds.Size());
-  FastLED.setBrightness(10); // WICHTIG - Hier wird die Helligkeit eingestellt. Am Anfang einen niedrigen Wert verwenden, und langsam hochtasten.
-  FastLED.clear(true);
-
-  ScrollingMsg.SetFont(RobotronFontData);
-  ScrollingMsg.Init(&leds, leds.Width(), leds.Height() + 1, 0, 0);
-  ScrollingMsg.SetText((unsigned char *)TxtDemo, sizeof(TxtDemo) - 1);
-  ScrollingMsg.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 0xff, 0x00, 0xff);
 
   //connect to WiFi
   Serial.printf("Connecting to %s ", ssid);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
+    delay(500);
+    Serial.print(".");
   }
   Serial.println(" CONNECTED");
-  
+
   //init and get the time
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   printLocalTime();
@@ -122,6 +117,25 @@ void setup() {
   //disconnect WiFi as it's no longer needed
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
+
+  // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
+
+  FastLED.addLeds<CHIPSET, LED_PIN, COLOR_ORDER>(leds[0], leds.Size());
+  FastLED.setBrightness(10); // WICHTIG - Hier wird die Helligkeit eingestellt. Am Anfang einen niedrigen Wert verwenden, und langsam hochtasten.
+  FastLED.clear(true);
+  ScrollingMsg.SetFont(RobotronFontData);
+  ScrollingMsg.Init(&leds, leds.Width(), leds.Height() + 1, 0, 0);
+  Serial.println(sizeof(TxtDemo));
+  ScrollingMsg.SetText((unsigned char *)TxtDemo, sizeof(TxtDemo) - 1);
+  ScrollingMsg.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 0xff, 0x00, 0xff);
+
+  
+  /*
+    ScrollingMsg.SetFont(RobotronFontData);
+    ScrollingMsg.Init(&leds, leds.Width(), leds.Height() + 1, 0, 0);
+    ScrollingMsg.SetText((unsigned char *)TxtDemo, sizeof(TxtDemo) - 1);
+    ScrollingMsg.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 0xff, 0x00, 0xff);
+  */
 }
 
 void loop()
@@ -140,26 +154,22 @@ void TaskBlink(void *pvParameters)  // This is a task.
   FastLED.setBrightness(255);
 
   for (;;) {
-    /*
-      if (ScrollingMsg.UpdateText() == -1){
+
+    if(millis()>=letzteZeit+2500)
+    {
+      zahl++;if(zahl>57) zahl=48;
+      TxtDemo[15]=zahl;
       ScrollingMsg.SetText((unsigned char *)TxtDemo, sizeof(TxtDemo) - 1);
-      delay(20);
-      }
-      else
+      letzteZeit = millis();
+    }
+    
+    if (ScrollingMsg.UpdateText() == -1){
+    ScrollingMsg.SetText((unsigned char *)TxtDemo, sizeof(TxtDemo) - 1);
+    vTaskDelay(500);
+    }
+    else
       FastLED.show();
-      delay(20);
-    */
-
-
-    lels[PixelPosition(2, 2)] = CHSV(0, 255, 255);
-    lels[PixelPosition(3, 2)] = CHSV(0, 255, 255);
-    lels[PixelPosition(4, 2)] = CHSV(0, 255, 255);
-    lels[PixelPosition(3, 3)] = CHSV(0, 255, 255);
-    lels[PixelPosition(3, 4)] = CHSV(0, 255, 255);
-    lels[PixelPosition(3, 5)] = CHSV(0, 255, 255);
-
-
-    FastLED.show();
+    vTaskDelay(20);
   }
 }
 void TaskAnalogReadA3(void *pvParameters)  // This is a task.
@@ -181,7 +191,7 @@ void TaskAnalogReadA3(void *pvParameters)  // This is a task.
     int sensorValue = analogRead(GAS_ANALOG);
     // print out the value you read:
     Serial.println(sensorValue);
-    vTaskDelay(10);  // one tick delay (15ms) in between reads for stability
+    vTaskDelay(1000);  // one tick delay (15ms) in between reads for stability
   }
 }
 
