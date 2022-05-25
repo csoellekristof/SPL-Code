@@ -16,6 +16,7 @@
 #define NUM_LEDS 256
 #define GAS_ANALOG 4
 
+#define BTN_PIN        18
 #define LED_PIN        12
 #define COLOR_ORDER    RGB
 #define CHIPSET        WS2812B
@@ -24,12 +25,16 @@
 #define MATRIX_HEIGHT  -8
 #define MATRIX_TYPE    VERTICAL_ZIGZAG_MATRIX // Wie sind die LEDs angeordnet
 
-const char* ssid       = "sheeshtof";
-const char* password   = "asdasdasd";
+const char* ssid       = "jonny";
+const char* password   = "jonny004";
 int wetterTyp;
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 3600;
 const int   daylightOffset_sec = 3600;
+int buttonCount;
+bool zustand = LOW;
+bool alterZustand = LOW;
+long int letzteFlankenZeit = 0;
 
 int timesec = 0;
 int timemin = 0;
@@ -89,7 +94,7 @@ void printLocalTime()
   Serial.println(timesec / 10);
   Serial.println("-------------");
 }
-
+void TaskBtn( void *pvParameters );
 void TaskBlink( void *pvParameters );
 void TaskAnalogReadA3( void *pvParameters );
 void TaskGetTime( void *pvParameters );
@@ -102,6 +107,14 @@ void setup() {
   // initialize serial communication at 115200 bits per second:
   Serial.begin(115200);
 
+  xTaskCreatePinnedToCore(
+    TaskBtn
+    ,  "TaskBtn"   // A name just for humans
+    ,  16000  // This stack size can be checked & adjusted by reading the Stack Highwater
+    ,  NULL
+    ,  1  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
+    ,  NULL
+    ,  ARDUINO_RUNNING_CORE);
   // Now set up two tasks to run independently.
   xTaskCreatePinnedToCore(
     TaskBlink
@@ -176,13 +189,8 @@ void setup() {
   ScrollingMsg.SetText((unsigned char *)TxtDemo, sizeof(TxtDemo) - 1);
   ScrollingMsg.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 0xff, 0x00, 0xff);
 
+  pinMode(BTN_PIN, INPUT);
 
-  /*
-    ScrollingMsg.SetFont(RobotronFontData);
-    ScrollingMsg.Init(&leds, leds.Width(), leds.Height() + 1, 0, 0);
-    ScrollingMsg.SetText((unsigned char *)TxtDemo, sizeof(TxtDemo) - 1);
-    ScrollingMsg.SetTextColrOptions(COLR_RGB | COLR_SINGLE, 0xff, 0x00, 0xff);
-  */
 }
 
 void loop()
@@ -192,7 +200,27 @@ void loop()
 /*--------------------------------------------------*/
 /*---------------------- Tasks ---------------------*/
 /*--------------------------------------------------*/
+void TaskBtn(void *pvParameters)
+{
+  (void) pvParameters;
 
+  for(;;){
+    zustand = digitalRead(BTN_PIN);
+    bool steigFlanke = zustand && !alterZustand;
+    bool irgendeineFlanke = (zustand != alterZustand);
+    if(steigFlanke && (millis() > letzteFlankenZeit+100)){
+      buttonCount++;
+      Serial.println("-:-:-:-:-:-:-:-:-:-:-:-:-:-:-");
+      Serial.println(buttonCount);
+      Serial.println("-:-:-:-:-:-:-:-:-:-:-:-:-:-:-");
+    }
+    if(irgendeineFlanke) letzteFlankenZeit=millis();
+    alterZustand=zustand;
+    if(buttonCount == 5){
+      buttonCount = 0;
+    }
+  }
+}
 void TaskBlink(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
@@ -201,7 +229,11 @@ void TaskBlink(void *pvParameters)  // This is a task.
   FastLED.setBrightness(255);
 
   for (;;) {
-
+    if(buttonCount == 0){
+      vTaskResume(NULL);
+    }else{
+      vTaskSuspend(NULL);
+    }
     if (millis() >= letzteZeit + 5000)
     {
       TxtDemo[15] = (timehour / 10) + 48;
@@ -222,6 +254,7 @@ void TaskBlink(void *pvParameters)  // This is a task.
     }
     else {
       FastLED.show();
+      
       vTaskDelay(20);
     }
   }
@@ -230,17 +263,13 @@ void TaskAnalogReadA3(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
 
-  /*
-    AnalogReadSerial
-    Reads an analog input on pin A3, prints the result to the serial monitor.
-    Graphical representation is available using serial plotter (Tools > Serial Plotter menu)
-    Attach the center pin of a potentiometer to pin A3, and the outside pins to +5V and ground.
-
-    This example code is in the public domain.
-  */
-
   for (;;)
   {
+    if(buttonCount == 1){
+      vTaskResume(NULL);
+    }else{
+      vTaskSuspend(NULL);
+    }
     // read the input on analog pin A3:
     int sensorValue = analogRead(GAS_ANALOG);
     // print out the value you read:
@@ -255,16 +284,26 @@ void TaskGetTime(void *pvParameters)  // This is a task.
 
   for (;;)
   {
+    if(buttonCount == 2){
+      vTaskResume(NULL);
+    }else{
+      vTaskSuspend(NULL);
+    }
     vTaskDelay(1000);
     printLocalTime();
   }
 }
-void TaskAnalogReadA3(void *pvParameters)  // This is a task.
+void TaskGetTemp(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
 
   for (;;)
   {
+    if(buttonCount == 3){
+      vTaskResume(NULL);
+    }else{
+      vTaskSuspend(NULL);
+    }
     vTaskDelay(1000);
     if ((millis() - lastTime) > timerDelay) {
 
@@ -312,7 +351,11 @@ void TaskSetTemp(void *pvParameters)  // This is a task.
   FastLED.setBrightness(255);
 
   for (;;) {
-
+    if(buttonCount == 4){
+      vTaskResume(NULL);
+    }else{
+      vTaskSuspend(NULL);
+    }
     if (millis() >= letzteZeit + 3500)
     {
       int tempz = (temp / 10) + 48;
@@ -343,16 +386,16 @@ void TaskSetTemp(void *pvParameters)  // This is a task.
 String httpGETRequest(const char* serverName) {
   WiFiClient client;
   HTTPClient http;
-    
+
   // Your Domain name with URL path or IP address with path
   http.begin(client, serverName);
-  
+
   // Send HTTP POST request
   int httpResponseCode = http.GET();
-  
-  String payload = "{}"; 
-  
-  if (httpResponseCode>0) {
+
+  String payload = "{}";
+
+  if (httpResponseCode > 0) {
     Serial.print("HTTP Response code: ");
     Serial.println(httpResponseCode);
     payload = http.getString();
